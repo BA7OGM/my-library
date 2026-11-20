@@ -86,6 +86,14 @@
   .btn.primary:hover{background:var(--primary-dark);border-color:var(--primary-dark);}
   .btn:disabled{opacity:.55;cursor:not-allowed;transform:none;}
 
+  /* 删除小按钮 */
+  .btn-del {
+    background: #fff; border: 1px solid var(--err); color: var(--err);
+    padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-del:hover { background: var(--err-soft); }
+
   .status{margin-top:14px;font-size:13px;line-height:1.45;padding:0;border-radius:10px;word-break:break-word;transition:all .15s;}
   .status:not(:empty){padding:10px 12px;}
   .status.info{background:#eef2ff;color:#3730a3;}
@@ -99,9 +107,9 @@
   .count{font-size:12px;color:var(--muted);font-weight:500;}
 
   .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;}
-  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:780px;}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:850px;}
   thead th{position:sticky;top:0;background:#f8f9fd;text-align:left;font-weight:600;color:#4b5268;padding:11px 12px;border-bottom:1px solid var(--border);white-space:nowrap;}
-  tbody td{padding:10px 12px;border-bottom:1px solid #f1f3f8;vertical-align:top;}
+  tbody td{padding:10px 12px;border-bottom:1px solid #f1f3f8;vertical-align:middle;}
   tbody tr:last-child td{border-bottom:none;}
   tbody tr:hover{background:#fafbff;}
   td.mono,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:#4b5268;}
@@ -240,11 +248,11 @@
           <table>
             <thead>
               <tr>
-                <th>ID</th><th>书名</th><th>作者</th><th>ISBN</th><th>登记日期</th><th>装箱</th>
+                <th>ID</th><th>书名</th><th>作者</th><th>ISBN</th><th>登记日期</th><th>装箱</th><th>操作</th>
               </tr>
             </thead>
             <tbody id="rows">
-              <tr><td colspan="6" class="empty">加载中…</td></tr>
+              <tr><td colspan="7" class="empty">加载中…</td></tr>
             </tbody>
           </table>
         </div>
@@ -402,6 +410,26 @@ async function updateBoxStatus(id, status) {
   return await r.json();
 }
 
+// 新增：删除操作
+async function deleteBook(id) {
+  const ok = await showConfirm('确认删除', '确定要永久删除这条图书记录吗？', '确定删除', '取消');
+  if (!ok) return;
+  try {
+    const url = `${SB_URL}/rest/v1/${TABLE}?id=eq.${id}`;
+    const r = await fetch(url, {
+      method: 'DELETE',
+      headers: sbHeaders()
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error(`删除失败: ${txt}`);
+    }
+    searchBooks(); // 刷新列表
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
 /* =========================================================
    通用弹窗 (确认框)
    ========================================================= */
@@ -454,6 +482,7 @@ const SOURCES = {
     name: 'Open Library',
     async lookup(isbn) {
       const r = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`);
+      if (!r.ok) throw new Error(`OpenLibrary 响应错误 (${r.status})`);
       const data = await r.json();
       const key = `ISBN:${isbn}`;
       if (!data[key]) throw new Error('Open Library 未收录该 ISBN');
@@ -464,6 +493,7 @@ const SOURCES = {
     name: 'Google Books',
     async lookup(isbn) {
       const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&maxResults=1`);
+      if (!r.ok) throw new Error(`Google Books 响应错误 (${r.status})`);
       const data = await r.json();
       if (!data.items || !data.items.length) throw new Error('Google Books 未找到该 ISBN');
       const v = data.items[0].volumeInfo || {};
@@ -473,11 +503,17 @@ const SOURCES = {
   douban: {
     name: '豆瓣图书',
     async lookup(isbn) {
-      const proxyUrl = `${SB_URL}/functions/v1/dynamic-endpoint?isbn=${isbn}`; // 你的函数真实路径
+      const proxyUrl = `${SB_URL}/functions/v1/dynamic-endpoint?isbn=${isbn}`;
       const headers = { 'Authorization': 'Bearer ' + SB_KEY, 'apikey': SB_KEY };
       
       const r = await fetch(proxyUrl, { headers });
-      if (!r.ok) throw new Error(`代理服务响应错误 (${r.status})`);
+      
+      if (!r.ok) {
+        if (r.status === 500) {
+          throw new Error('豆瓣服务器响应超时或被限流，请稍后再试，或切换数据源。');
+        }
+        throw new Error(`代理服务响应错误 (${r.status})`);
+      }
       
       const data = await r.json();
       if (!data.success) throw new Error(data.error || '从豆瓣获取数据失败');
@@ -549,7 +585,7 @@ async function handleQueryAndSave() {
       setStatus(el.addStatus, '已取消保存', 'info');
     }
   } catch (err) {
-    setStatus(el.addStatus, `查询失败：${escapeHtml(err.message)}`, 'error');
+    setStatus(el.addStatus, `查询失败：${escapeHtml(err.message)}<br>可尝试手动填写书名并点击“手动保存”。`, 'error');
   }
 }
 
@@ -584,12 +620,10 @@ async function handleToggleBox() {
       return;
     }
 
-    // 检查第一条（通常复本状态应该一致，如果不一致以第一条为准）
     const record = records[0];
     const isCurrentlyBoxed = record.is_boxed === true;
 
     if (isCurrentlyBoxed) {
-      // 取消装箱确认
       const ok = await showConfirm('取消装箱', '该图书已装箱，是否取消装箱状态？', '取消装箱');
       if (ok) {
         for (const r of records) await updateBoxStatus(r.id, false);
@@ -600,7 +634,6 @@ async function handleToggleBox() {
         setStatus(el.boxStatus, '操作已取消', 'info');
       }
     } else {
-      // 直接装箱
       for (const r of records) await updateBoxStatus(r.id, true);
       setStatus(el.boxStatus, '✔ 已成功装箱', 'success');
       el.boxIsbn.value = '';
@@ -616,7 +649,7 @@ async function handleToggleBox() {
    ========================================================= */
 function renderRows(rows) {
   el.count.textContent = rows.length ? `共 ${rows.length} 条` : '';
-  if (!rows.length) { el.rows.innerHTML = `<tr><td colspan="6" class="empty">没有找到匹配的图书</td></tr>`; return; }
+  if (!rows.length) { el.rows.innerHTML = `<tr><td colspan="7" class="empty">没有找到匹配的图书</td></tr>`; return; }
   
   el.rows.innerHTML = rows.map(b => `
     <tr>
@@ -626,6 +659,7 @@ function renderRows(rows) {
       <td class="mono">${escapeHtml(b.isbn || '')}</td>
       <td>${escapeHtml(b.registered_at || '')}</td>
       <td>${b.is_boxed ? '<span style="color:var(--ok);font-weight:bold;">是</span>' : ''}</td>
+      <td><button class="btn-del" onclick="deleteBook(${b.id})">删除</button></td>
     </tr>
   `).join('');
 }
@@ -637,6 +671,7 @@ async function searchBooks() {
   if (rawKeyword) {
     const isNumeric = /^\d+X?$/i.test(rawKeyword);
     if (isNumeric) {
+      // 移除可能引起解析问题的符号，采用精确查询+模糊查询组合
       url += `&or=(isbn.ilike.*${rawKeyword}*,isbn.eq.${rawKeyword})`;
     } else {
       let keywords = [rawKeyword];
@@ -661,17 +696,20 @@ async function searchBooks() {
   setStatus(el.qStatus, '查询中…', 'busy');
   try {
     const r = await fetch(url, { headers: sbHeaders() });
-    if (!r.ok) throw new Error('请求失败');
+    if (!r.ok) {
+       const errTxt = await r.text();
+       throw new Error(`状态 ${r.status}: ${errTxt}`);
+    }
     renderRows(await r.json());
     setStatus(el.qStatus, '', '');
   } catch (err) {
-    el.rows.innerHTML = `<tr><td colspan="6" class="empty">加载失败</td></tr>`;
-    setStatus(el.qStatus, escapeHtml(err.message), 'error');
+    el.rows.innerHTML = `<tr><td colspan="7" class="empty">加载失败</td></tr>`;
+    setStatus(el.qStatus, '查询失败：' + escapeHtml(err.message), 'error');
   }
 }
 
 /* =========================================================
-   相机扫描模块 (核心修改)
+   相机扫描模块
    ========================================================= */
 let html5QrcodeScanner = null;
 let scanMode = 'add'; // 'add', 'search', 'box'
@@ -711,7 +749,7 @@ function startCameraScan(mode) {
 async function onScanSuccess(decodedText) {
   if (isProcessingScan) return;
   isProcessingScan = true;
-  html5QrcodeScanner.pause(); // 暂停扫描，防止重复触发
+  html5QrcodeScanner.pause();
 
   const isbn = decodedText.replace(/[^0-9Xx]/g, '').toUpperCase();
   if (!isValidISBN(isbn)) {
@@ -721,7 +759,6 @@ async function onScanSuccess(decodedText) {
   }
 
   if (scanMode === 'add') {
-    // 需求：在扫描界面显示查询到的内容并保存
     showScanFeedback('⏳ 正在查询并保存…', 'busy');
     try {
       const info = await SOURCES[el.source.value].lookup(isbn);
@@ -729,7 +766,6 @@ async function onScanSuccess(decodedText) {
       
       let shouldSave = true;
       if (existing.length > 0) {
-        // 如果有重复，弹窗
         const ok = await confirmDuplicate(isbn, existing);
         if (!ok) shouldSave = false;
       }
@@ -756,7 +792,6 @@ async function onScanSuccess(decodedText) {
       } else {
         const isCurrentlyBoxed = records[0].is_boxed === true;
         if (isCurrentlyBoxed) {
-          // 暂停摄像头，弹出确认框
           const ok = await showConfirm('取消装箱', '该图书已装箱，是否取消装箱状态？', '取消装箱');
           if (ok) {
             for (const r of records) await updateBoxStatus(r.id, false);
@@ -768,7 +803,7 @@ async function onScanSuccess(decodedText) {
           for (const r of records) await updateBoxStatus(r.id, true);
           showScanFeedback('✔ 已成功装箱', 'success');
         }
-        searchBooks(); // 更新后台列表
+        searchBooks();
       }
     } catch (err) {
       showScanFeedback(`❌ 失败: ${err.message}`, 'error');
@@ -781,7 +816,6 @@ async function onScanSuccess(decodedText) {
     return;
   }
 
-  // 处理完后恢复扫码（如果是 add 或 box 模式且界面未关闭）
   setTimeout(() => {
     isProcessingScan = false;
     if ($('scanModal').classList.contains('show')) {
@@ -822,8 +856,8 @@ el.q.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); searchBooks(); }
 });
 
-// 绑定装箱按钮
-el.btnToggleBox.addEventListener('click', handleToggleBox);
+// 将 deleteBook 暴露到全局，以便表格中的 onclick 能调用
+window.deleteBook = deleteBook;
 
 (function init() {
   el.date.value = todayISO();
