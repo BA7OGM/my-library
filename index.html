@@ -173,6 +173,7 @@
             <label for="source">查询数据源</label>
             <select id="source">
               <option value="douban" selected>豆瓣图书 (推荐)</option>
+              <option value="tplaza">Tplaza 哈台舘 (澳洲)</option>
               <option value="isbntw">isbn.tw (台版备用)</option>
               <option value="openlibrary">Open Library</option>
               <option value="googlebooks">Google Books</option>
@@ -490,7 +491,6 @@ let currentBooksData = [];
 let currentEditId = null;
 
 function editBook(id) {
-  // 从内存中直接读取数据，瞬间响应
   const book = currentBooksData.find(b => b.id === id);
   if (!book) {
     alert('未找到该图书的数据，请刷新页面重试');
@@ -658,6 +658,15 @@ const SOURCES = {
       return lookupWithCache(isbn, 'isbntw', async (i) => {
         const proxyUrl = `${SB_URL}/functions/v1/isbntw-proxy?isbn=${i}`;
         return await fetchProxy(proxyUrl, 'isbn.tw');
+      });
+    }
+  },
+  tplaza: {
+    name: 'Tplaza 哈台舘',
+    async lookup(isbn) {
+      return lookupWithCache(isbn, 'tplaza', async (i) => {
+        const proxyUrl = `${SB_URL}/functions/v1/tplaza-proxy?isbn=${i}`;
+        return await fetchProxy(proxyUrl, 'Tplaza');
       });
     }
   }
