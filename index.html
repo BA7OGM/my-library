@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>藏书管理 · 添加与查询</title>
+<!-- 引入条形码/二维码扫描库 -->
+<script src="https://unpkg.com/html5-qrcode"></script>
+<style>
+  :root{
+    --bg:#f4f5f9; --card:#ffffff; --text:#1e2330; --muted:#6b7280;
+    --border:#e4e7ef; --primary:#4f46e5; --primary-dark:#4338ca; --primary-soft:#eef0ff;
+    --ok:#0d9488; --ok-soft:#e6fffa; --err:#dc2626; --err-soft:#fef2f2;
+    --warn:#b45309; --radius:16px;
+    --shadow:0 1px 2px rgba(16,24,40,.04), 0 8px 24px -12px rgba(16,24,40,.18);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:1560px;margin:0 auto;padding:22px 20px 56px;}
+  .topbar{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:4px 4px 18px;}
+  .topbar h1{font-size:22px;margin:0;}
+  .topbar .sub{margin:0;color:var(--muted);font-size:13px;}
+  .layout{display:grid;gap:20px;grid-template-columns:minmax(330px, 400px) minmax(0, 1fr);align-items:start;}
+  @media (max-width: 940px){.layout{grid-template-columns:minmax(0,1fr);}}
+  
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);display:flex;flex-direction:column;min-width:0;}
+  .card-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fbfcff,#fff);}
+  .card-head h2{font-size:16px;margin:0;font-weight:650;}
+  .card-body{padding:18px 20px 20px;}
+
+  .field{margin-bottom:15px;}
+  .field > label{display:block;font-size:13px;font-weight:600;color:#414861;margin-bottom:6px;}
+  .req{color:var(--err);}
+  input[type=text],input[type=date],input[type=search],select{
+    width:100%; padding:10px 12px; font-size:14px; font-family:inherit; color:var(--text);
+    background:#fff; border:1px solid var(--border); border-radius:10px; outline:none;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  input[type=text]:focus,input[type=date]:focus,input[type=search]:focus,select:focus{
+    border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-soft);
+  }
+  input::placeholder{color:#a5abbb;}
+  select{appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;cursor:pointer;}
+
+  /* ISBN 输入框组 */
+  .isbn-group { position: relative; }
+  .isbn-group input { padding-right: 42px; }
+  .camera-btn {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; padding: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); border-radius: 6px; transition: background .15s, color .15s;
+  }
+  .camera-btn:hover { background: #f1f3f8; color: var(--primary); }
+  
+  .hint{font-size:12px;color:var(--muted);margin-top:6px;min-height:16px;}
+  .hint.bad{color:var(--err);}
+  .hint.good{color:var(--ok);}
+  input.invalid{border-color:var(--err);background:var(--err-soft);}
+  input.valid{border-color:var(--ok);}
+
+  .actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;}
+  .btn{
+    appearance:none;border:1px solid var(--border);background:#fff;color:var(--text);
+    font-size:14px;font-weight:600;padding:10px 16px;border-radius:10px;cursor:pointer;
+    transition:background .15s,border-color .15s,transform .05s,box-shadow .15s;white-space:nowrap;
+  }
+  .btn:hover{background:#f7f8fc;border-color:#d3d8e6;}
+  .btn:active{transform:translateY(1px);}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 6px 16px -8px rgba(79,70,229,.9);flex:1 1 180px;}
+  .btn.primary:hover{background:var(--primary-dark);border-color:var(--primary-dark);}
+  .btn:disabled{opacity:.55;cursor:not-allowed;transform:none;}
+
+  .status{margin-top:14px;font-size:13px;line-height:1.45;padding:0;border-radius:10px;word-break:break-word;transition:all .15s;}
+  .status:not(:empty){padding:10px 12px;}
+  .status.info{background:#eef2ff;color:#3730a3;}
+  .status.success{background:var(--ok-soft);color:#0f766e;}
+  .status.error{background:var(--err-soft);color:var(--err);}
+  .status.busy{background:#fff7ed;color:var(--warn);}
+
+  .searchbar{display:flex;gap:10px;margin-bottom:14px;}
+  .searchbar input{flex:1 1 auto;min-width:0;}
+  .searchbar .btn{flex:0 0 auto;}
+  .count{font-size:12px;color:var(--muted);font-weight:500;}
+
+  .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:680px;}
+  thead th{position:sticky;top:0;background:#f8f9fd;text-align:left;font-weight:600;color:#4b5268;padding:11px 12px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  tbody td{padding:10px 12px;border-bottom:1px solid #f1f3f8;vertical-align:top;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:#fafbff;}
+  td.mono,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:#4b5268;}
+  td.empty{text-align:center;color:var(--muted);padding:32px 12px;}
+
+  /* 弹窗样式 */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(18,22,34,.45);display:flex;align-items:center;justify-content:center;padding:18px;z-index:100;opacity:0;visibility:hidden;transition:opacity .16s,visibility .16s;backdrop-filter:blur(2px);}
+  .modal-backdrop.show{opacity:1;visibility:visible;}
+  .modal{background:#fff;border-radius:16px;width:100%;max-width:520px;box-shadow:0 24px 64px -16px rgba(16,24,40,.45);padding:22px;transform:translateY(8px) scale(.98);transition:transform .16s;max-height:85vh;overflow:auto;}
+  .modal-backdrop.show .modal{transform:none;}
+  .modal h3{margin:0 0 12px;font-size:16px;}
+  .modal-body{font-size:14px;color:#3d4459;}
+  .modal-body p{margin:0 0 10px;}
+  .modal-body code{background:#f1f3f8;padding:1px 6px;border-radius:6px;font-size:12.5px;}
+  .dup-list{list-style:none;margin:0 0 14px;padding:0;max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:10px;}
+  .dup-list li{padding:8px 12px;border-bottom:1px solid #f1f3f8;font-size:13px;}
+  .dup-list li:last-child{border-bottom:none;}
+  .dup-id{color:var(--muted);font-family:ui-monospace,monospace;font-size:12px;margin-right:6px;}
+  .muted{color:var(--muted);font-size:12.5px;}
+  .dup-check{display:flex;align-items:flex-start;gap:9px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:11px 13px;font-size:13.5px;cursor:pointer;user-select:none;}
+  .dup-check input{margin-top:2px;width:16px;height:16px;accent-color:var(--primary);cursor:pointer;flex:0 0 auto;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+
+  /* 相机扫描专用 */
+  #reader { width: 100%; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 10px; }
+  #reader video { object-fit: cover; }
+  .dots::after{content:'';animation:dots 1.2s steps(4,end) infinite;}
+  @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <h1>📚 藏书管理</h1>
+    <p class="sub">添加图书 · 查询馆藏</p>
+  </header>
+
+  <main class="layout">
+    <!-- ================= 添加图书 ================= -->
+    <section class="card">
+      <div class="card-head"><h2>添加图书</h2></div>
+      <div class="card-body">
+        <div class="field">
+          <label for="source">查询数据源</label>
+          <select id="source">
+            <option value="douban" selected>豆瓣图书 (推荐)</option>
+            <option value="openlibrary">Open Library</option>
+            <option value="googlebooks">Google Books</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="isbn">ISBN <span class="req">*</span></label>
+          <div class="isbn-group">
+            <input id="isbn" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="ISBN-10 或 ISBN-13，可含连字符" />
+            <!-- 相机图标按钮 -->
+            <button class="camera-btn" id="btnScan" type="button" title="扫描条形码">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+            </button>
+          </div>
+          <div class="hint" id="isbnHint">输入后按 Enter 可直接查询并保存</div>
+        </div>
+
+        <div class="field">
+          <label for="title">书名</label>
+          <input id="title" type="text" placeholder="查询后自动填充，也可手动输入" />
+        </div>
+        <div class="field">
+          <label for="author">作者</label>
+          <input id="author" type="text" placeholder="查询后自动填充，也可手动输入" />
+        </div>
+        <div class="field">
+          <label for="date">登记日期</label>
+          <input id="date" type="date" />
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="btnQuery" type="button">查询并保存图书</button>
+          <button class="btn" id="btnManual" type="button">手动保存</button>
+        </div>
+        <div class="status" id="addStatus"></div>
+      </div>
+    </section>
+
+    <!-- ================= 查询图书 ================= -->
+    <section class="card">
+      <div class="card-head">
+        <h2>查询图书</h2>
+        <span class="count" id="count"></span>
+      </div>
+      <div class="card-body">
+        <div class="searchbar">
+          <input id="q" type="search" placeholder="搜索书名 / 作者 / ISBN…" />
+          <button class="btn primary" id="btnSearch" type="button">搜索</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>书名</th><th>作者</th><th>ISBN</th><th>登记日期</th>
+              </tr>
+            </thead>
+            <tbody id="rows">
+              <tr><td colspan="5" class="empty">加载中…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="status" id="qStatus"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ================= 扫码弹窗 ================= -->
+<div class="modal-backdrop" id="scanModal">
+  <div class="modal" style="max-width: 500px;">
+    <h3>扫描图书条形码</h3>
+    <p class="muted" style="margin-bottom:12px;">请将图书背面的条形码对准摄像头</p>
+    <div id="reader"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCloseScan" type="button">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 重复确认弹窗 ================= -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3 id="modalTitle">提示</h3>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-actions" id="modalActions"></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   配置项 (请确保这里的项目 ID 和 Key 与你的一致)
+   ========================================================= */
+const SB_URL  = 'https://kbdciafyckuamzkoxayx.supabase.co';
+const SB_KEY  = 'sb_publishable_Hk039AxhVNmWdAEygcqDGQ_Y43vePRF';
+const TABLE   = 'Database';
+
+const $ = (id) => document.getElementById(id);
+
+function sbHeaders(extra = {}) {
+  return Object.assign({
+    'apikey': SB_KEY,
+    'Authorization': 'Bearer ' + SB_KEY,
+    'Content-Type': 'application/json'
+  }, extra);
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function todayISO() {
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function setStatus(el, msg, type) {
+  el.className = 'status' + (type ? ' ' + type : '');
+  el.innerHTML = msg || '';
+}
+
+/* =========================================================
+   ISBN 校验
+   ========================================================= */
+function normalizeISBN(raw) {
+  return String(raw || '').replace(/[-\s\u3000]/g, '').toUpperCase();
+}
+
+function isValidISBN(raw) {
+  const v = normalizeISBN(raw);
+  if (/^\d{9}[\dX]$/.test(v)) {
+    let sum = 0;
+    for (let i = 0; i < 10; i++) {
+      const d = v[i] === 'X' ? 10 : Number(v[i]);
+      sum += d * (10 - i);
+    }
+    return sum % 11 === 0;
+  }
+  if (/^\d{13}$/.test(v)) {
+    if (!/^97[89]/.test(v)) return false;
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += Number(v[i]) * (i % 2 === 0 ? 1 : 3);
+    const check = (10 - (sum % 10)) % 10;
+    return check === Number(v[12]);
+  }
+  return false;
+}
+
+/* =========================================================
+   Supabase 操作
+   ========================================================= */
+async function nextId() {
+  const url = `${SB_URL}/rest/v1/${TABLE}?select=id&order=id.desc&limit=1`;
+  const r = await fetch(url, { headers: sbHeaders() });
+  if (!r.ok) throw new Error('读取记录失败');
+  const rows = await r.json();
+  return rows.length ? Number(rows[0].id) + 1 : 1;
+}
+
+async function findByISBN(isbn) {
+  const url = `${SB_URL}/rest/v1/${TABLE}?select=id,title,author,isbn&isbn=eq.${encodeURIComponent(isbn)}`;
+  const r = await fetch(url, { headers: sbHeaders() });
+  if (!r.ok) throw new Error('查重失败');
+  return await r.json();
+}
+
+async function insertBook(book) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const id = await nextId();
+    const payload = {
+      id: id, title: book.title, author: book.author || null,
+      isbn: book.isbn, registered_at: book.registered_at, is_boxed: false
+    };
+    const r = await fetch(`${SB_URL}/rest/v1/${TABLE}`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify(payload)
+    });
+    if (r.ok) return (await r.json())[0];
+    const text = await r.text();
+    if (!/duplicate key|23505/i.test(text)) throw new Error(text);
+  }
+  throw new Error('保存失败：主键冲突，请重试');
+}
+
+/* =========================================================
+   弹窗：ISBN 重复确认
+   ========================================================= */
+function confirmDuplicate(isbn, existing) {
+  return new Promise((resolve) => {
+    const modal = $('modal'), body = $('modalBody'), actions = $('modalActions');
+    $('modalTitle').textContent = '该 ISBN 已存在';
+    body.innerHTML = `
+      <p>ISBN <code>${escapeHtml(isbn)}</code> 在库中已有 <b>${existing.length}</b> 条记录：</p>
+      <ul class="dup-list">
+        ${existing.map(b => `<li><span class="dup-id">#${escapeHtml(b.id)}</span>${escapeHtml(b.title || '')}</li>`).join('')}
+      </ul>
+      <label class="dup-check">
+        <input type="checkbox" id="dupConfirm" />
+        <span>我确认这是一本<b>复本</b>，仍要添加</span>
+      </label>`;
+    actions.innerHTML = `<button class="btn" id="dupCancel">取消</button><button class="btn primary" id="dupOk" disabled>确认添加</button>`;
+    modal.classList.add('show');
+
+    const check = body.querySelector('#dupConfirm');
+    const okBtn = actions.querySelector('#dupOk');
+    
+    check.addEventListener('change', () => { okBtn.disabled = !check.checked; });
+    const close = (val) => { modal.classList.remove('show'); resolve(val); };
+    okBtn.addEventListener('click', () => close(true));
+    actions.querySelector('#dupCancel').addEventListener('click', () => close(false));
+  });
+}
+
+/* =========================================================
+   数据源 (豆瓣使用 Supabase 代理)
+   ========================================================= */
+const SOURCES = {
+  openlibrary: {
+    name: 'Open Library',
+    async lookup(isbn) {
+      const r = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`);
+      const data = await r.json();
+      const key = `ISBN:${isbn}`;
+      if (!data[key]) throw new Error('Open Library 未收录该 ISBN');
+      return { title: data[key].title || '', author: (data[key].authors || []).map(a => a.name).join(', ') };
+    }
+  },
+  googlebooks: {
+    name: 'Google Books',
+    async lookup(isbn) {
+      const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&maxResults=1`);
+      const data = await r.json();
+      if (!data.items || !data.items.length) throw new Error('Google Books 未找到该 ISBN');
+      const v = data.items[0].volumeInfo || {};
+      return { title: v.title || '', author: (v.authors || []).join(', ') };
+    }
+  },
+  douban: {
+    name: '豆瓣图书',
+    async lookup(isbn) {
+      // 调用你刚刚部署的 Supabase Edge Function 代理
+      const proxyUrl = `${SB_URL}/functions/v1/douban-proxy?isbn=${isbn}`;
+      const headers = { 'Authorization': 'Bearer ' + SB_KEY, 'apikey': SB_KEY };
+      
+      const r = await fetch(proxyUrl, { headers });
+      if (!r.ok) throw new Error(`代理服务响应错误 (${r.status})`);
+      
+      const data = await r.json();
+      if (!data.success) throw new Error(data.error || '从豆瓣获取数据失败');
+      return { title: data.title, author: data.author };
+    }
+  }
+};
+
+/* =========================================================
+   UI 引用与逻辑
+   ========================================================= */
+const el = {
+  source: $('source'), isbn: $('isbn'), title: $('title'), author: $('author'), date: $('date'),
+  isbnHint: $('isbnHint'), btnQuery: $('btnQuery'), btnManual: $('btnManual'), addStatus: $('addStatus'),
+  q: $('q'), btnSearch: $('btnSearch'), rows: $('rows'), qStatus: $('qStatus'), count: $('count')
+};
+
+el.isbn.addEventListener('input', () => {
+  const raw = el.isbn.value.trim(), norm = normalizeISBN(raw);
+  el.isbn.classList.remove('invalid', 'valid');
+  el.isbnHint.className = 'hint';
+  
+  if (!norm) { el.isbnHint.textContent = '输入后按 Enter 可直接查询并保存'; return; }
+  
+  if (isValidISBN(norm)) {
+    el.isbn.classList.add('valid');
+    el.isbnHint.classList.add('good');
+    el.isbnHint.textContent = `✔ ISBN 合法（${norm.length} 位）`;
+  } else {
+    if (norm.length >= 10) {
+      el.isbn.classList.add('invalid');
+      el.isbnHint.classList.add('bad');
+      el.isbnHint.textContent = '✘ ISBN 校验位不正确';
+    } else {
+      el.isbnHint.textContent = '正在输入…';
+    }
+  }
+});
+
+async function saveBookWithDupCheck(book) {
+  const existing = await findByISBN(book.isbn);
+  if (existing.length > 0) {
+    const ok = await confirmDuplicate(book.isbn, existing);
+    if (!ok) { setStatus(el.addStatus, '已取消保存', 'info'); return null; }
+  }
+  const saved = await insertBook(book);
+  setStatus(el.addStatus, `✔ 保存成功：#${saved.id} 《${saved.title}》`, 'success');
+  return saved;
+}
+
+function resetForm() {
+  el.isbn.value = ''; el.title.value = ''; el.author.value = '';
+  el.date.value = todayISO();
+  el.isbn.classList.remove('invalid', 'valid');
+  el.isbnHint.className = 'hint'; el.isbnHint.textContent = '输入后按 Enter 可直接查询并保存';
+}
+
+function setBusy(busy) {
+  el.btnQuery.disabled = busy;
+  el.btnManual.disabled = busy;
+}
+
+async function handleQueryAndSave() {
+  const isbn = normalizeISBN(el.isbn.value);
+  if (!isbn) { setStatus(el.addStatus, '请先输入 ISBN', 'error'); return; }
+  if (!isValidISBN(isbn)) { setStatus(el.addStatus, 'ISBN 格式不合法', 'error'); return; }
+  if (!el.date.value) el.date.value = todayISO();
+
+  const source = SOURCES[el.source.value];
+  setBusy(true);
+  setStatus(el.addStatus, `正在通过 <b>${source.name}</b> 查询 <span class="mono">${isbn}</span><span class="dots"></span>`, 'busy');
+
+  try {
+    const info = await source.lookup(isbn);
+    el.title.value = info.title;
+    el.author.value = info.author || '';
+    setStatus(el.addStatus, `查询成功，正在保存…`, 'busy');
+
+    const saved = await saveBookWithDupCheck({
+      title: info.title, author: info.author, isbn: isbn, registered_at: el.date.value
+    });
+
+    if (saved) { resetForm(); searchBooks(); }
+  } catch (err) {
+    setStatus(el.addStatus, `查询失败：${escapeHtml(err.message)}<br>可手动填写书名后点击「手动保存」。`, 'error');
+  } finally { setBusy(false); }
+}
+
+async function handleManualSave() {
+  const isbn = normalizeISBN(el.isbn.value), title = el.title.value.trim();
+  if (!isbn || !isValidISBN(isbn)) { setStatus(el.addStatus, '请填写合法的 ISBN', 'error'); return; }
+  if (!title) { setStatus(el.addStatus, '请填写书名', 'error'); return; }
+  if (!el.date.value) el.date.value = todayISO();
+
+  setBusy(true);
+  setStatus(el.addStatus, '正在保存…', 'busy');
+  try {
+    const saved = await saveBookWithDupCheck({
+      title: title, author: el.author.value.trim(), isbn: isbn, registered_at: el.date.value
+    });
+    if (saved) { resetForm(); searchBooks(); }
+  } catch (err) {
+    setStatus(el.addStatus, '保存失败：' + escapeHtml(err.message), 'error');
+  } finally { setBusy(false); }
+}
+
+/* =========================================================
+   搜索列表
+   ========================================================= */
+function renderRows(rows) {
+  el.count.textContent = rows.length ? `共 ${rows.length} 条` : '';
+  if (!rows.length) { el.rows.innerHTML = `<tr><td colspan="5" class="empty">没有找到匹配的图书</td></tr>`; return; }
+  
+  el.rows.innerHTML = rows.map(b => `
+    <tr>
+      <td class="mono">${escapeHtml(b.id)}</td>
+      <td>${escapeHtml(b.title || '')}</td>
+      <td>${escapeHtml(b.author || '')}</td>
+      <td class="mono">${escapeHtml(b.isbn || '')}</td>
+      <td>${escapeHtml(b.registered_at || '')}</td>
+    </tr>
+  `).join('');
+}
+
+async function searchBooks() {
+  const keyword = el.q.value.trim().replace(/[,()*%]/g, ' ').trim();
+  let url = `${SB_URL}/rest/v1/${TABLE}?select=id,title,author,isbn,registered_at&order=id.desc&limit=300`;
+  if (keyword) {
+    const p = encodeURIComponent('*' + keyword + '*');
+    url += `&or=(title.ilike.${p},author.ilike.${p},isbn.ilike.${p})`;
+  }
+  setStatus(el.qStatus, '查询中…', 'busy');
+  try {
+    const r = await fetch(url, { headers: sbHeaders() });
+    if (!r.ok) throw new Error('查询失败');
+    renderRows(await r.json());
+    setStatus(el.qStatus, '', '');
+  } catch (err) {
+    el.rows.innerHTML = `<tr><td colspan="5" class="empty">加载失败</td></tr>`;
+    setStatus(el.qStatus, escapeHtml(err.message), 'error');
+  }
+}
+
+/* =========================================================
+   相机扫描条形码模块
+   ========================================================= */
+let html5QrcodeScanner = null;
+
+async function startCameraScan() {
+  const scanModal = $('scanModal');
+  scanModal.classList.add('show');
+  
+  html5QrcodeScanner = new Html5Qrcode("reader");
+  const config = { 
+    fps: 10, 
+    qrbox: { width: 280, height: 150 },
+    // 限制只识别条形码，提高识别率和速度
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.CODE_128
+    ]
+  };
+
+  try {
+    await html5QrcodeScanner.start(
+      { facingMode: "environment" }, // 优先后置摄像头
+      config,
+      (decodedText, decodedResult) => {
+        // 扫描成功
+        onScanSuccess(decodedText);
+      },
+      (errorMessage) => { /* 扫描过程中的失败，忽略 */ }
+    );
+  } catch (err) {
+    alert(`无法启动摄像头: ${err.message}\n\n请确保：\n1. 使用的是 HTTPS 或 localhost 访问。\n2. 浏览器已授予摄像头权限。`);
+    closeCameraScan();
+  }
+}
+
+async function closeCameraScan() {
+  $('scanModal').classList.remove('show');
+  if (html5QrcodeScanner) {
+    try { await html5QrcodeScanner.stop(); } catch(e) {}
+    html5QrcodeScanner.clear();
+    html5QrcodeScanner = null;
+  }
+}
+
+function onScanSuccess(decodedText) {
+  // 停止扫码
+  closeCameraScan();
+  
+  // 清洗数据 (有些条形码扫出来带有非数字字符)
+  const cleanCode = decodedText.replace(/[^0-9Xx]/g, '').toUpperCase();
+  
+  // 填入输入框
+  el.isbn.value = cleanCode;
+  // 触发 input 事件以更新校验提示
+  el.isbn.dispatchEvent(new Event('input'));
+  
+  // 自动触发查询
+  setTimeout(() => {
+    if (isValidISBN(cleanCode)) {
+      handleQueryAndSave();
+    } else {
+      setStatus(el.addStatus, '扫描到的条码格式不合法，请手动检查', 'error');
+    }
+  }, 300); // 延迟一小点，等输入框事件执行完
+}
+
+$('btnScan').addEventListener('click', startCameraScan);
+$('btnCloseScan').addEventListener('click', closeCameraScan);
+
+/* =========================================================
+   事件绑定与初始化
+   ========================================================= */
+el.btnQuery.addEventListener('click', handleQueryAndSave);
+el.btnManual.addEventListener('click', handleManualSave);
+el.btnSearch.addEventListener('click', searchBooks);
+
+el.isbn.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); if (!el.btnQuery.disabled) handleQueryAndSave(); }
+});
+[el.title, el.author].forEach(inp => {
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); if (!el.btnManual.disabled) handleManualSave(); }
+  });
+});
+el.q.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); searchBooks(); }
+});
+
+(function init() {
+  el.date.value = todayISO();
+  searchBooks();
+})();
+</script>
+</body>
+</html>
