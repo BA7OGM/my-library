@@ -6,6 +6,8 @@
 <title>藏书管理 · 添加与查询</title>
 <!-- 引入条形码/二维码扫描库 -->
 <script src="https://unpkg.com/html5-qrcode"></script>
+<!-- 引入 OpenCC 繁简转换库 -->
+<script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.min.js"></script>
 <style>
   :root{
     --bg:#f4f5f9; --card:#ffffff; --text:#1e2330; --muted:#6b7280;
@@ -47,16 +49,16 @@
   input::placeholder{color:#a5abbb;}
   select{appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;cursor:pointer;}
 
-  /* ISBN 输入框组 */
-  .isbn-group { position: relative; }
-  .isbn-group input { padding-right: 42px; }
-  .camera-btn {
+  /* 输入框组 (带有内嵌图标) */
+  .input-group { position: relative; display: flex; align-items: center; width: 100%; }
+  .input-group input { padding-right: 42px; }
+  .icon-btn {
     position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
     background: none; border: none; cursor: pointer; padding: 6px;
     display: flex; align-items: center; justify-content: center;
     color: var(--muted); border-radius: 6px; transition: background .15s, color .15s;
   }
-  .camera-btn:hover { background: #f1f3f8; color: var(--primary); }
+  .icon-btn:hover { background: #f1f3f8; color: var(--primary); }
   
   .hint{font-size:12px;color:var(--muted);margin-top:6px;min-height:16px;}
   .hint.bad{color:var(--err);}
@@ -69,6 +71,7 @@
     appearance:none;border:1px solid var(--border);background:#fff;color:var(--text);
     font-size:14px;font-weight:600;padding:10px 16px;border-radius:10px;cursor:pointer;
     transition:background .15s,border-color .15s,transform .05s,box-shadow .15s;white-space:nowrap;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
   }
   .btn:hover{background:#f7f8fc;border-color:#d3d8e6;}
   .btn:active{transform:translateY(1px);}
@@ -84,8 +87,8 @@
   .status.busy{background:#fff7ed;color:var(--warn);}
 
   .searchbar{display:flex;gap:10px;margin-bottom:14px;}
-  .searchbar input{flex:1 1 auto;min-width:0;}
-  .searchbar .btn{flex:0 0 auto;}
+  .searchbar .input-group { flex: 1 1 auto; min-width: 0; }
+  .searchbar .btn { flex: 0 0 auto; }
   .count{font-size:12px;color:var(--muted);font-weight:500;}
 
   .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;}
@@ -145,14 +148,10 @@
 
         <div class="field">
           <label for="isbn">ISBN <span class="req">*</span></label>
-          <div class="isbn-group">
+          <div class="input-group">
             <input id="isbn" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="ISBN-10 或 ISBN-13，可含连字符" />
-            <!-- 相机图标按钮 -->
-            <button class="camera-btn" id="btnScan" type="button" title="扫描条形码">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                <circle cx="12" cy="13" r="4"></circle>
-              </svg>
+            <button class="icon-btn" id="btnScanAdd" type="button" title="扫描条形码">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
             </button>
           </div>
           <div class="hint" id="isbnHint">输入后按 Enter 可直接查询并保存</div>
@@ -187,7 +186,12 @@
       </div>
       <div class="card-body">
         <div class="searchbar">
-          <input id="q" type="search" placeholder="搜索书名 / 作者 / ISBN…" />
+          <div class="input-group">
+            <input id="q" type="search" placeholder="搜索书名 / 作者 / ISBN… (支持繁简互通)" />
+            <button class="icon-btn" id="btnScanSearch" type="button" title="扫描条形码搜索">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+            </button>
+          </div>
           <button class="btn primary" id="btnSearch" type="button">搜索</button>
         </div>
         <div class="table-wrap">
@@ -211,8 +215,8 @@
 <!-- ================= 扫码弹窗 ================= -->
 <div class="modal-backdrop" id="scanModal">
   <div class="modal" style="max-width: 500px;">
-    <h3>扫描图书条形码</h3>
-    <p class="muted" style="margin-bottom:12px;">请将图书背面的条形码对准摄像头</p>
+    <h3 id="scanTitle">扫描条形码</h3>
+    <p class="muted" style="margin-bottom:12px;">请将条形码对准摄像头</p>
     <div id="reader"></div>
     <div class="modal-actions">
       <button class="btn" id="btnCloseScan" type="button">取消</button>
@@ -231,7 +235,7 @@
 
 <script>
 /* =========================================================
-   配置项 (请确保这里的项目 ID 和 Key 与你的一致)
+   配置项 (已修正代理 URL)
    ========================================================= */
 const SB_URL  = 'https://kbdciafyckuamzkoxayx.supabase.co';
 const SB_KEY  = 'sb_publishable_Hk039AxhVNmWdAEygcqDGQ_Y43vePRF';
@@ -358,7 +362,7 @@ function confirmDuplicate(isbn, existing) {
 }
 
 /* =========================================================
-   数据源 (豆瓣使用 Supabase 代理)
+   数据源 (豆瓣使用正确的 Supabase 代理 URL)
    ========================================================= */
 const SOURCES = {
   openlibrary: {
@@ -384,7 +388,7 @@ const SOURCES = {
   douban: {
     name: '豆瓣图书',
     async lookup(isbn) {
-      // 调用你刚刚部署的 Supabase Edge Function 代理
+      // 注意这里：函数名是 douban-proxy，不是 dynamic-endpoint
       const proxyUrl = `${SB_URL}/functions/v1/douban-proxy?isbn=${isbn}`;
       const headers = { 'Authorization': 'Bearer ' + SB_KEY, 'apikey': SB_KEY };
       
@@ -497,7 +501,7 @@ async function handleManualSave() {
 }
 
 /* =========================================================
-   搜索列表
+   搜索列表 (集成繁简转换)
    ========================================================= */
 function renderRows(rows) {
   el.count.textContent = rows.length ? `共 ${rows.length} 条` : '';
@@ -515,12 +519,40 @@ function renderRows(rows) {
 }
 
 async function searchBooks() {
-  const keyword = el.q.value.trim().replace(/[,()*%]/g, ' ').trim();
+  const rawKeyword = el.q.value.trim().replace(/[,()*%]/g, ' ').trim();
   let url = `${SB_URL}/rest/v1/${TABLE}?select=id,title,author,isbn,registered_at&order=id.desc&limit=300`;
-  if (keyword) {
-    const p = encodeURIComponent('*' + keyword + '*');
-    url += `&or=(title.ilike.${p},author.ilike.${p},isbn.ilike.${p})`;
+  
+  if (rawKeyword) {
+    // 繁简转换处理
+    let keywords = [rawKeyword];
+    if (window.OpenCC) {
+      try {
+        const toTrad = OpenCC.Converter({ from: 'cn', to: 'tw' });
+        const toSimp = OpenCC.Converter({ from: 'tw', to: 'cn' });
+        
+        const tradKw = toTrad(rawKeyword);
+        const simpKw = toSimp(rawKeyword);
+        
+        if (tradKw !== rawKeyword) keywords.push(tradKw);
+        if (simpKw !== rawKeyword) keywords.push(simpKw);
+      } catch(e) { console.warn('繁简转换库未准备好', e); }
+    }
+    
+    // 去重
+    keywords = [...new Set(keywords)];
+
+    // 构建 PostgREST 的 or 查询条件
+    const orConditions = [];
+    keywords.forEach(kw => {
+      const p = encodeURIComponent('*' + kw + '*');
+      orConditions.push(`title.ilike.${p}`);
+      orConditions.push(`author.ilike.${p}`);
+      orConditions.push(`isbn.ilike.${p}`);
+    });
+    
+    url += `&or=(${orConditions.join(',')})`;
   }
+
   setStatus(el.qStatus, '查询中…', 'busy');
   try {
     const r = await fetch(url, { headers: sbHeaders() });
@@ -534,19 +566,37 @@ async function searchBooks() {
 }
 
 /* =========================================================
-   相机扫描条形码模块
+   通用相机扫码模块
    ========================================================= */
 let html5QrcodeScanner = null;
+let scanCallback = null;
 
-async function startCameraScan() {
+function startCameraScan(mode) {
   const scanModal = $('scanModal');
+  $('scanTitle').textContent = mode === 'add' ? '扫描以添加图书' : '扫描以查询图书';
+  
+  scanCallback = (decodedText) => {
+    const cleanCode = decodedText.replace(/[^0-9Xx]/g, '').toUpperCase();
+    if (mode === 'add') {
+      el.isbn.value = cleanCode;
+      el.isbn.dispatchEvent(new Event('input'));
+      if (isValidISBN(cleanCode)) handleQueryAndSave();
+      else setStatus(el.addStatus, '扫描到的条码格式不合法', 'error');
+    } else {
+      el.q.value = cleanCode;
+      searchBooks();
+    }
+  };
+
   scanModal.classList.add('show');
   
-  html5QrcodeScanner = new Html5Qrcode("reader");
+  if (!html5QrcodeScanner) {
+    html5QrcodeScanner = new Html5Qrcode("reader");
+  }
+  
   const config = { 
     fps: 10, 
     qrbox: { width: 280, height: 150 },
-    // 限制只识别条形码，提高识别率和速度
     formatsToSupport: [
       Html5QrcodeSupportedFormats.EAN_13,
       Html5QrcodeSupportedFormats.EAN_8,
@@ -556,20 +606,18 @@ async function startCameraScan() {
     ]
   };
 
-  try {
-    await html5QrcodeScanner.start(
-      { facingMode: "environment" }, // 优先后置摄像头
-      config,
-      (decodedText, decodedResult) => {
-        // 扫描成功
-        onScanSuccess(decodedText);
-      },
-      (errorMessage) => { /* 扫描过程中的失败，忽略 */ }
-    );
-  } catch (err) {
-    alert(`无法启动摄像头: ${err.message}\n\n请确保：\n1. 使用的是 HTTPS 或 localhost 访问。\n2. 浏览器已授予摄像头权限。`);
+  html5QrcodeScanner.start(
+    { facingMode: "environment" },
+    config,
+    (decodedText) => {
+      closeCameraScan();
+      if (scanCallback) scanCallback(decodedText);
+    },
+    (err) => { /* 忽略扫描失败帧 */ }
+  ).catch(err => {
+    alert(`无法启动摄像头: ${err.message}\n\n请确保：\n1. 使用 HTTPS 或 localhost 访问。\n2. 允许浏览器使用摄像头。`);
     closeCameraScan();
-  }
+  });
 }
 
 async function closeCameraScan() {
@@ -577,34 +625,8 @@ async function closeCameraScan() {
   if (html5QrcodeScanner) {
     try { await html5QrcodeScanner.stop(); } catch(e) {}
     html5QrcodeScanner.clear();
-    html5QrcodeScanner = null;
   }
 }
-
-function onScanSuccess(decodedText) {
-  // 停止扫码
-  closeCameraScan();
-  
-  // 清洗数据 (有些条形码扫出来带有非数字字符)
-  const cleanCode = decodedText.replace(/[^0-9Xx]/g, '').toUpperCase();
-  
-  // 填入输入框
-  el.isbn.value = cleanCode;
-  // 触发 input 事件以更新校验提示
-  el.isbn.dispatchEvent(new Event('input'));
-  
-  // 自动触发查询
-  setTimeout(() => {
-    if (isValidISBN(cleanCode)) {
-      handleQueryAndSave();
-    } else {
-      setStatus(el.addStatus, '扫描到的条码格式不合法，请手动检查', 'error');
-    }
-  }, 300); // 延迟一小点，等输入框事件执行完
-}
-
-$('btnScan').addEventListener('click', startCameraScan);
-$('btnCloseScan').addEventListener('click', closeCameraScan);
 
 /* =========================================================
    事件绑定与初始化
@@ -612,6 +634,10 @@ $('btnCloseScan').addEventListener('click', closeCameraScan);
 el.btnQuery.addEventListener('click', handleQueryAndSave);
 el.btnManual.addEventListener('click', handleManualSave);
 el.btnSearch.addEventListener('click', searchBooks);
+
+$('btnScanAdd').addEventListener('click', () => startCameraScan('add'));
+$('btnScanSearch').addEventListener('click', () => startCameraScan('search'));
+$('btnCloseScan').addEventListener('click', closeCameraScan);
 
 el.isbn.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); if (!el.btnQuery.disabled) handleQueryAndSave(); }
