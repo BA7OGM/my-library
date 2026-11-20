@@ -35,6 +35,14 @@
   .card-head h2{font-size:16px;margin:0;font-weight:650;}
   .card-body{padding:18px 20px 20px;}
 
+  /* Tabs */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: #fbfcff; border-radius: var(--radius) var(--radius) 0 0; }
+  .tab-btn { flex: 1; padding: 12px; text-align: center; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .tab-btn:hover { color: var(--primary); }
+  .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: #fff; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
   .field{margin-bottom:15px;}
   .field > label{display:block;font-size:13px;font-weight:600;color:#414861;margin-bottom:6px;}
   .req{color:var(--err);}
@@ -49,7 +57,6 @@
   input::placeholder{color:#a5abbb;}
   select{appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;cursor:pointer;}
 
-  /* 输入框组 (带有内嵌图标) */
   .input-group { position: relative; display: flex; align-items: center; width: 100%; }
   .input-group input { padding-right: 42px; }
   .icon-btn {
@@ -92,7 +99,7 @@
   .count{font-size:12px;color:var(--muted);font-weight:500;}
 
   .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;}
-  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:680px;}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:780px;}
   thead th{position:sticky;top:0;background:#f8f9fd;text-align:left;font-weight:600;color:#4b5268;padding:11px 12px;border-bottom:1px solid var(--border);white-space:nowrap;}
   tbody td{padding:10px 12px;border-bottom:1px solid #f1f3f8;vertical-align:top;}
   tbody tr:last-child td{border-bottom:none;}
@@ -123,6 +130,12 @@
   #reader video { object-fit: cover; }
   .dots::after{content:'';animation:dots 1.2s steps(4,end) infinite;}
   @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+
+  /* 扫码结果提示 */
+  #scanFeedback { display: none; padding: 12px; border-radius: 10px; margin-top: 10px; font-size: 14px; text-align: center; font-weight: 500; }
+  #scanFeedback.success { display: block; background: var(--ok-soft); color: var(--ok); border: 1px solid var(--ok); }
+  #scanFeedback.error { display: block; background: var(--err-soft); color: var(--err); border: 1px solid var(--err); }
+  #scanFeedback.busy { display: block; background: #fff7ed; color: var(--warn); border: 1px solid var(--warn); }
 </style>
 </head>
 <body>
@@ -133,48 +146,77 @@
   </header>
 
   <main class="layout">
-    <!-- ================= 添加图书 ================= -->
+    <!-- ================= 左侧控制面板 ================= -->
     <section class="card">
-      <div class="card-head"><h2>添加图书</h2></div>
+      <!-- Tabs 切换 -->
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="tab-add">添加图书</button>
+        <button class="tab-btn" data-tab="tab-box">装箱管理</button>
+      </div>
+
       <div class="card-body">
-        <div class="field">
-          <label for="source">查询数据源</label>
-          <select id="source">
-            <option value="douban" selected>豆瓣图书 (推荐)</option>
-            <option value="openlibrary">Open Library</option>
-            <option value="googlebooks">Google Books</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="isbn">ISBN <span class="req">*</span></label>
-          <div class="input-group">
-            <input id="isbn" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="ISBN-10 或 ISBN-13，可含连字符" />
-            <button class="icon-btn" id="btnScanAdd" type="button" title="扫描条形码">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-            </button>
+        
+        <!-- ====== Tab 1: 添加图书 ====== -->
+        <div id="tab-add" class="tab-content active">
+          <div class="field">
+            <label for="source">查询数据源</label>
+            <select id="source">
+              <option value="douban" selected>豆瓣图书 (推荐)</option>
+              <option value="openlibrary">Open Library</option>
+              <option value="googlebooks">Google Books</option>
+            </select>
           </div>
-          <div class="hint" id="isbnHint">输入后按 Enter 可直接查询并保存</div>
+
+          <div class="field">
+            <label for="isbn">ISBN <span class="req">*</span></label>
+            <div class="input-group">
+              <input id="isbn" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="ISBN-10 或 ISBN-13" />
+              <button class="icon-btn" id="btnScanAdd" type="button" title="扫描条形码">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              </button>
+            </div>
+            <div class="hint" id="isbnHint">输入后按 Enter 可直接查询并保存</div>
+          </div>
+
+          <div class="field">
+            <label for="title">书名</label>
+            <input id="title" type="text" placeholder="查询后自动填充" />
+          </div>
+          <div class="field">
+            <label for="author">作者</label>
+            <input id="author" type="text" placeholder="查询后自动填充" />
+          </div>
+          <div class="field">
+            <label for="date">登记日期</label>
+            <input id="date" type="date" />
+          </div>
+
+          <div class="actions">
+            <button class="btn primary" id="btnQuery" type="button">查询并保存</button>
+            <button class="btn" id="btnManual" type="button">手动保存</button>
+          </div>
+          <div class="status" id="addStatus"></div>
         </div>
 
-        <div class="field">
-          <label for="title">书名</label>
-          <input id="title" type="text" placeholder="查询后自动填充，也可手动输入" />
-        </div>
-        <div class="field">
-          <label for="author">作者</label>
-          <input id="author" type="text" placeholder="查询后自动填充，也可手动输入" />
-        </div>
-        <div class="field">
-          <label for="date">登记日期</label>
-          <input id="date" type="date" />
+        <!-- ====== Tab 2: 装箱管理 ====== -->
+        <div id="tab-box" class="tab-content">
+          <div class="field">
+            <label for="boxIsbn">ISBN <span class="req">*</span></label>
+            <div class="input-group">
+              <input id="boxIsbn" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="输入或扫描 ISBN" />
+              <button class="icon-btn" id="btnScanBox" type="button" title="扫描条形码">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              </button>
+            </div>
+            <div class="hint">输入后按 Enter 快速切换装箱状态</div>
+          </div>
+          
+          <div class="actions">
+            <button class="btn primary" id="btnToggleBox" type="button">切换装箱状态</button>
+          </div>
+          <div class="status" id="boxStatus"></div>
         </div>
 
-        <div class="actions">
-          <button class="btn primary" id="btnQuery" type="button">查询并保存图书</button>
-          <button class="btn" id="btnManual" type="button">手动保存</button>
-        </div>
-        <div class="status" id="addStatus"></div>
       </div>
     </section>
 
@@ -187,7 +229,7 @@
       <div class="card-body">
         <div class="searchbar">
           <div class="input-group">
-            <input id="q" type="search" placeholder="搜索书名 / 作者 / ISBN… (支持繁简互通)" />
+            <input id="q" type="search" placeholder="搜索书名 / 作者 / ISBN… (支持繁简)" />
             <button class="icon-btn" id="btnScanSearch" type="button" title="扫描条形码搜索">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
             </button>
@@ -198,11 +240,11 @@
           <table>
             <thead>
               <tr>
-                <th>ID</th><th>书名</th><th>作者</th><th>ISBN</th><th>登记日期</th>
+                <th>ID</th><th>书名</th><th>作者</th><th>ISBN</th><th>登记日期</th><th>装箱</th>
               </tr>
             </thead>
             <tbody id="rows">
-              <tr><td colspan="5" class="empty">加载中…</td></tr>
+              <tr><td colspan="6" class="empty">加载中…</td></tr>
             </tbody>
           </table>
         </div>
@@ -218,9 +260,20 @@
     <h3 id="scanTitle">扫描条形码</h3>
     <p class="muted" style="margin-bottom:12px;">请将条形码对准摄像头</p>
     <div id="reader"></div>
+    <!-- 扫码内反馈区 -->
+    <div id="scanFeedback"></div>
     <div class="modal-actions">
-      <button class="btn" id="btnCloseScan" type="button">取消</button>
+      <button class="btn" id="btnCloseScan" type="button">关闭</button>
     </div>
+  </div>
+</div>
+
+<!-- ================= 通用确认弹窗 ================= -->
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:420px;">
+    <h3 id="confirmTitle">提示</h3>
+    <div class="modal-body" id="confirmBody"></div>
+    <div class="modal-actions" id="confirmActions"></div>
   </div>
 </div>
 
@@ -234,9 +287,6 @@
 </div>
 
 <script>
-/* =========================================================
-   配置项 (已修正代理 URL)
-   ========================================================= */
 const SB_URL  = 'https://kbdciafyckuamzkoxayx.supabase.co';
 const SB_KEY  = 'sb_publishable_Hk039AxhVNmWdAEygcqDGQ_Y43vePRF';
 const TABLE   = 'Database';
@@ -268,9 +318,6 @@ function setStatus(el, msg, type) {
   el.innerHTML = msg || '';
 }
 
-/* =========================================================
-   ISBN 校验
-   ========================================================= */
 function normalizeISBN(raw) {
   return String(raw || '').replace(/[-\s\u3000]/g, '').toUpperCase();
 }
@@ -296,6 +343,18 @@ function isValidISBN(raw) {
 }
 
 /* =========================================================
+   UI 交互：Tab 切换
+   ========================================================= */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    $(btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* =========================================================
    Supabase 操作
    ========================================================= */
 async function nextId() {
@@ -307,7 +366,7 @@ async function nextId() {
 }
 
 async function findByISBN(isbn) {
-  const url = `${SB_URL}/rest/v1/${TABLE}?select=id,title,author,isbn&isbn=eq.${encodeURIComponent(isbn)}`;
+  const url = `${SB_URL}/rest/v1/${TABLE}?select=id,title,author,isbn,is_boxed&isbn=eq.${encodeURIComponent(isbn)}`;
   const r = await fetch(url, { headers: sbHeaders() });
   if (!r.ok) throw new Error('查重失败');
   return await r.json();
@@ -329,12 +388,38 @@ async function insertBook(book) {
     const text = await r.text();
     if (!/duplicate key|23505/i.test(text)) throw new Error(text);
   }
-  throw new Error('保存失败：主键冲突，请重试');
+  throw new Error('保存失败：主键冲突');
+}
+
+async function updateBoxStatus(id, status) {
+  const url = `${SB_URL}/rest/v1/${TABLE}?id=eq.${id}`;
+  const r = await fetch(url, {
+    method: 'PATCH',
+    headers: sbHeaders({ 'Prefer': 'return=representation' }),
+    body: JSON.stringify({ is_boxed: status })
+  });
+  if (!r.ok) throw new Error('更新状态失败');
+  return await r.json();
 }
 
 /* =========================================================
-   弹窗：ISBN 重复确认
+   通用弹窗 (确认框)
    ========================================================= */
+function showConfirm(title, msg, okText = '确认', cancelText = '取消') {
+  return new Promise((resolve) => {
+    const modal = $('confirmModal'), body = $('confirmBody'), actions = $('confirmActions');
+    $('confirmTitle').textContent = title;
+    body.innerHTML = msg;
+    actions.innerHTML = `
+      <button class="btn" id="cmCancel">${cancelText}</button>
+      <button class="btn primary" id="cmOk">${okText}</button>
+    `;
+    modal.classList.add('show');
+    actions.querySelector('#cmCancel').onclick = () => { modal.classList.remove('show'); resolve(false); };
+    actions.querySelector('#cmOk').onclick = () => { modal.classList.remove('show'); resolve(true); };
+  });
+}
+
 function confirmDuplicate(isbn, existing) {
   return new Promise((resolve) => {
     const modal = $('modal'), body = $('modalBody'), actions = $('modalActions');
@@ -362,7 +447,7 @@ function confirmDuplicate(isbn, existing) {
 }
 
 /* =========================================================
-   数据源 (豆瓣使用正确的 Supabase 代理 URL)
+   数据源
    ========================================================= */
 const SOURCES = {
   openlibrary: {
@@ -388,7 +473,7 @@ const SOURCES = {
   douban: {
     name: '豆瓣图书',
     async lookup(isbn) {
-      const proxyUrl = `${SB_URL}/functions/v1/dynamic-endpoint?isbn=${isbn}`;
+      const proxyUrl = `${SB_URL}/functions/v1/dynamic-endpoint?isbn=${isbn}`; // 你的函数真实路径
       const headers = { 'Authorization': 'Bearer ' + SB_KEY, 'apikey': SB_KEY };
       
       const r = await fetch(proxyUrl, { headers });
@@ -402,33 +487,26 @@ const SOURCES = {
 };
 
 /* =========================================================
-   UI 引用与逻辑
+   核心逻辑：添加图书 (表单)
    ========================================================= */
 const el = {
   source: $('source'), isbn: $('isbn'), title: $('title'), author: $('author'), date: $('date'),
   isbnHint: $('isbnHint'), btnQuery: $('btnQuery'), btnManual: $('btnManual'), addStatus: $('addStatus'),
-  q: $('q'), btnSearch: $('btnSearch'), rows: $('rows'), qStatus: $('qStatus'), count: $('count')
+  q: $('q'), btnSearch: $('btnSearch'), rows: $('rows'), qStatus: $('qStatus'), count: $('count'),
+  boxIsbn: $('boxIsbn'), btnToggleBox: $('btnToggleBox'), boxStatus: $('boxStatus')
 };
 
 el.isbn.addEventListener('input', () => {
   const raw = el.isbn.value.trim(), norm = normalizeISBN(raw);
   el.isbn.classList.remove('invalid', 'valid');
   el.isbnHint.className = 'hint';
-  
   if (!norm) { el.isbnHint.textContent = '输入后按 Enter 可直接查询并保存'; return; }
-  
   if (isValidISBN(norm)) {
-    el.isbn.classList.add('valid');
-    el.isbnHint.classList.add('good');
-    el.isbnHint.textContent = `✔ ISBN 合法（${norm.length} 位）`;
+    el.isbn.classList.add('valid'); el.isbnHint.classList.add('good');
+    el.isbnHint.textContent = `✔ ISBN 合法`;
   } else {
-    if (norm.length >= 10) {
-      el.isbn.classList.add('invalid');
-      el.isbnHint.classList.add('bad');
-      el.isbnHint.textContent = '✘ ISBN 校验位不正确';
-    } else {
-      el.isbnHint.textContent = '正在输入…';
-    }
+    if (norm.length >= 10) { el.isbn.classList.add('invalid'); el.isbnHint.classList.add('bad'); el.isbnHint.textContent = '✘ 校验位错误'; }
+    else { el.isbnHint.textContent = '正在输入…'; }
   }
 });
 
@@ -436,11 +514,9 @@ async function saveBookWithDupCheck(book) {
   const existing = await findByISBN(book.isbn);
   if (existing.length > 0) {
     const ok = await confirmDuplicate(book.isbn, existing);
-    if (!ok) { setStatus(el.addStatus, '已取消保存', 'info'); return null; }
+    if (!ok) return null;
   }
-  const saved = await insertBook(book);
-  setStatus(el.addStatus, `✔ 保存成功：#${saved.id} 《${saved.title}》`, 'success');
-  return saved;
+  return await insertBook(book);
 }
 
 function resetForm() {
@@ -450,61 +526,97 @@ function resetForm() {
   el.isbnHint.className = 'hint'; el.isbnHint.textContent = '输入后按 Enter 可直接查询并保存';
 }
 
-function setBusy(busy) {
-  el.btnQuery.disabled = busy;
-  el.btnManual.disabled = busy;
-}
-
 async function handleQueryAndSave() {
   const isbn = normalizeISBN(el.isbn.value);
-  if (!isbn) { setStatus(el.addStatus, '请先输入 ISBN', 'error'); return; }
-  if (!isValidISBN(isbn)) { setStatus(el.addStatus, 'ISBN 格式不合法', 'error'); return; }
-  if (!el.date.value) el.date.value = todayISO();
-
-  const source = SOURCES[el.source.value];
-  setBusy(true);
-  setStatus(el.addStatus, `正在通过 <b>${source.name}</b> 查询 <span class="mono">${isbn}</span><span class="dots"></span>`, 'busy');
-
+  if (!isbn || !isValidISBN(isbn)) { setStatus(el.addStatus, '请输入合法的 ISBN', 'error'); return; }
+  
+  setStatus(el.addStatus, `正在查询…`, 'busy');
   try {
-    const info = await source.lookup(isbn);
-    el.title.value = info.title;
-    el.author.value = info.author || '';
-    setStatus(el.addStatus, `查询成功，正在保存…`, 'busy');
-
+    const info = await SOURCES[el.source.value].lookup(isbn);
+    el.title.value = info.title; el.author.value = info.author || '';
+    
     const saved = await saveBookWithDupCheck({
-      title: info.title, author: info.author, isbn: isbn, registered_at: el.date.value
+      title: info.title, author: info.author, isbn: isbn, registered_at: el.date.value || todayISO()
     });
-
-    if (saved) { resetForm(); searchBooks(); }
+    
+    if (saved) {
+      setStatus(el.addStatus, `✔ 保存成功：《${saved.title}》`, 'success');
+      // 需求：查询成功后清空ISBN输入框
+      el.isbn.value = ''; el.title.value = ''; el.author.value = '';
+      el.isbn.dispatchEvent(new Event('input'));
+      searchBooks();
+    } else {
+      setStatus(el.addStatus, '已取消保存', 'info');
+    }
   } catch (err) {
-    setStatus(el.addStatus, `查询失败：${escapeHtml(err.message)}<br>可手动填写书名后点击「手动保存」。`, 'error');
-  } finally { setBusy(false); }
+    setStatus(el.addStatus, `查询失败：${escapeHtml(err.message)}`, 'error');
+  }
 }
 
 async function handleManualSave() {
   const isbn = normalizeISBN(el.isbn.value), title = el.title.value.trim();
-  if (!isbn || !isValidISBN(isbn)) { setStatus(el.addStatus, '请填写合法的 ISBN', 'error'); return; }
+  if (!isbn || !isValidISBN(isbn)) { setStatus(el.addStatus, '请输入合法的 ISBN', 'error'); return; }
   if (!title) { setStatus(el.addStatus, '请填写书名', 'error'); return; }
-  if (!el.date.value) el.date.value = todayISO();
-
-  setBusy(true);
-  setStatus(el.addStatus, '正在保存…', 'busy');
+  
   try {
     const saved = await saveBookWithDupCheck({
-      title: title, author: el.author.value.trim(), isbn: isbn, registered_at: el.date.value
+      title: title, author: el.author.value.trim(), isbn: isbn, registered_at: el.date.value || todayISO()
     });
-    if (saved) { resetForm(); searchBooks(); }
-  } catch (err) {
-    setStatus(el.addStatus, '保存失败：' + escapeHtml(err.message), 'error');
-  } finally { setBusy(false); }
+    if (saved) {
+      setStatus(el.addStatus, `✔ 保存成功`, 'success');
+      resetForm(); searchBooks();
+    } else { setStatus(el.addStatus, '已取消保存', 'info'); }
+  } catch (err) { setStatus(el.addStatus, '保存失败：' + escapeHtml(err.message), 'error'); }
 }
 
 /* =========================================================
-   搜索列表 (集成繁简转换)
+   核心逻辑：装箱管理
+   ========================================================= */
+async function handleToggleBox() {
+  const isbn = normalizeISBN(el.boxIsbn.value);
+  if (!isbn || !isValidISBN(isbn)) { setStatus(el.boxStatus, '请输入合法的 ISBN', 'error'); return; }
+
+  setStatus(el.boxStatus, '正在查询…', 'busy');
+  try {
+    const records = await findByISBN(isbn);
+    if (records.length === 0) {
+      setStatus(el.boxStatus, '未找到该 ISBN 的图书，请先添加。', 'error');
+      return;
+    }
+
+    // 检查第一条（通常复本状态应该一致，如果不一致以第一条为准）
+    const record = records[0];
+    const isCurrentlyBoxed = record.is_boxed === true;
+
+    if (isCurrentlyBoxed) {
+      // 取消装箱确认
+      const ok = await showConfirm('取消装箱', '该图书已装箱，是否取消装箱状态？', '取消装箱');
+      if (ok) {
+        for (const r of records) await updateBoxStatus(r.id, false);
+        setStatus(el.boxStatus, '✔ 已取消装箱', 'success');
+        el.boxIsbn.value = '';
+        searchBooks();
+      } else {
+        setStatus(el.boxStatus, '操作已取消', 'info');
+      }
+    } else {
+      // 直接装箱
+      for (const r of records) await updateBoxStatus(r.id, true);
+      setStatus(el.boxStatus, '✔ 已成功装箱', 'success');
+      el.boxIsbn.value = '';
+      searchBooks();
+    }
+  } catch (err) {
+    setStatus(el.boxStatus, '操作失败：' + escapeHtml(err.message), 'error');
+  }
+}
+
+/* =========================================================
+   搜索与表格渲染
    ========================================================= */
 function renderRows(rows) {
   el.count.textContent = rows.length ? `共 ${rows.length} 条` : '';
-  if (!rows.length) { el.rows.innerHTML = `<tr><td colspan="5" class="empty">没有找到匹配的图书</td></tr>`; return; }
+  if (!rows.length) { el.rows.innerHTML = `<tr><td colspan="6" class="empty">没有找到匹配的图书</td></tr>`; return; }
   
   el.rows.innerHTML = rows.map(b => `
     <tr>
@@ -513,114 +625,175 @@ function renderRows(rows) {
       <td>${escapeHtml(b.author || '')}</td>
       <td class="mono">${escapeHtml(b.isbn || '')}</td>
       <td>${escapeHtml(b.registered_at || '')}</td>
+      <td>${b.is_boxed ? '<span style="color:var(--ok);font-weight:bold;">是</span>' : ''}</td>
     </tr>
   `).join('');
 }
 
 async function searchBooks() {
   const rawKeyword = el.q.value.trim().replace(/[,()*%]/g, ' ').trim();
-  let url = `${SB_URL}/rest/v1/${TABLE}?select=id,title,author,isbn,registered_at&order=id.desc&limit=300`;
+  let url = `${SB_URL}/rest/v1/${TABLE}?select=id,title,author,isbn,registered_at,is_boxed&order=id.desc&limit=300`;
   
   if (rawKeyword) {
-    // 繁简转换处理
-    let keywords = [rawKeyword];
-    if (window.OpenCC) {
-      try {
-        const toTrad = OpenCC.Converter({ from: 'cn', to: 'tw' });
-        const toSimp = OpenCC.Converter({ from: 'tw', to: 'cn' });
-        
-        const tradKw = toTrad(rawKeyword);
-        const simpKw = toSimp(rawKeyword);
-        
-        if (tradKw !== rawKeyword) keywords.push(tradKw);
-        if (simpKw !== rawKeyword) keywords.push(simpKw);
-      } catch(e) { console.warn('繁简转换库未准备好', e); }
+    const isNumeric = /^\d+X?$/i.test(rawKeyword);
+    if (isNumeric) {
+      url += `&or=(isbn.ilike.*${rawKeyword}*,isbn.eq.${rawKeyword})`;
+    } else {
+      let keywords = [rawKeyword];
+      if (window.OpenCC) {
+        try {
+          const toTrad = OpenCC.Converter({ from: 'cn', to: 'tw' });
+          const toSimp = OpenCC.Converter({ from: 'tw', to: 'cn' });
+          if (toTrad(rawKeyword) !== rawKeyword) keywords.push(toTrad(rawKeyword));
+          if (toSimp(rawKeyword) !== rawKeyword) keywords.push(toSimp(rawKeyword));
+        } catch(e) {}
+      }
+      keywords = [...new Set(keywords)];
+      const orConditions = [];
+      keywords.forEach(kw => {
+        const p = `*${encodeURIComponent(kw)}*`; 
+        orConditions.push(`title.ilike.${p}`, `author.ilike.${p}`);
+      });
+      url += `&or=(${orConditions.join(',')})`;
     }
-    
-    // 去重
-    keywords = [...new Set(keywords)];
-
-    // 构建 PostgREST 的 or 查询条件
-    const orConditions = [];
-    keywords.forEach(kw => {
-      const p = encodeURIComponent('*' + kw + '*');
-      orConditions.push(`title.ilike.${p}`);
-      orConditions.push(`author.ilike.${p}`);
-      orConditions.push(`isbn.ilike.${p}`);
-    });
-    
-    url += `&or=(${orConditions.join(',')})`;
   }
 
   setStatus(el.qStatus, '查询中…', 'busy');
   try {
     const r = await fetch(url, { headers: sbHeaders() });
-    if (!r.ok) throw new Error('查询失败');
+    if (!r.ok) throw new Error('请求失败');
     renderRows(await r.json());
     setStatus(el.qStatus, '', '');
   } catch (err) {
-    el.rows.innerHTML = `<tr><td colspan="5" class="empty">加载失败</td></tr>`;
+    el.rows.innerHTML = `<tr><td colspan="6" class="empty">加载失败</td></tr>`;
     setStatus(el.qStatus, escapeHtml(err.message), 'error');
   }
 }
 
 /* =========================================================
-   通用相机扫码模块
+   相机扫描模块 (核心修改)
    ========================================================= */
 let html5QrcodeScanner = null;
-let scanCallback = null;
+let scanMode = 'add'; // 'add', 'search', 'box'
+let isProcessingScan = false;
+
+const scanFeedbackEl = $('scanFeedback');
+
+function showScanFeedback(msg, type) {
+  scanFeedbackEl.className = type;
+  scanFeedbackEl.textContent = msg;
+  setTimeout(() => { scanFeedbackEl.className = ''; }, 2000);
+}
 
 function startCameraScan(mode) {
-  const scanModal = $('scanModal');
-  $('scanTitle').textContent = mode === 'add' ? '扫描以添加图书' : '扫描以查询图书';
+  scanMode = mode;
+  $('scanTitle').textContent = mode === 'add' ? '连续扫描添加' : (mode === 'box' ? '扫描装箱' : '扫描查询');
   
-  scanCallback = (decodedText) => {
-    const cleanCode = decodedText.replace(/[^0-9Xx]/g, '').toUpperCase();
-    if (mode === 'add') {
-      el.isbn.value = cleanCode;
-      el.isbn.dispatchEvent(new Event('input'));
-      if (isValidISBN(cleanCode)) handleQueryAndSave();
-      else setStatus(el.addStatus, '扫描到的条码格式不合法', 'error');
-    } else {
-      el.q.value = cleanCode;
-      searchBooks();
-    }
-  };
-
-  scanModal.classList.add('show');
+  $('scanModal').classList.add('show');
+  scanFeedbackEl.className = '';
   
   if (!html5QrcodeScanner) {
     html5QrcodeScanner = new Html5Qrcode("reader");
   }
   
-  const config = { 
-    fps: 10, 
-    qrbox: { width: 280, height: 150 },
-    formatsToSupport: [
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.CODE_128
-    ]
-  };
+  const config = { fps: 10, qrbox: { width: 280, height: 150 }, formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8] };
 
   html5QrcodeScanner.start(
-    { facingMode: "environment" },
-    config,
-    (decodedText) => {
-      closeCameraScan();
-      if (scanCallback) scanCallback(decodedText);
-    },
-    (err) => { /* 忽略扫描失败帧 */ }
+    { facingMode: "environment" }, config,
+    onScanSuccess,
+    () => { /* 忽略帧错误 */ }
   ).catch(err => {
-    alert(`无法启动摄像头: ${err.message}\n\n请确保：\n1. 使用 HTTPS 或 localhost 访问。\n2. 允许浏览器使用摄像头。`);
+    alert(`无法启动摄像头: ${err.message}\n请确保使用 HTTPS 并允许权限。`);
     closeCameraScan();
   });
 }
 
+async function onScanSuccess(decodedText) {
+  if (isProcessingScan) return;
+  isProcessingScan = true;
+  html5QrcodeScanner.pause(); // 暂停扫描，防止重复触发
+
+  const isbn = decodedText.replace(/[^0-9Xx]/g, '').toUpperCase();
+  if (!isValidISBN(isbn)) {
+    showScanFeedback('❌ ISBN 格式不合法', 'error');
+    setTimeout(() => { isProcessingScan = false; html5QrcodeScanner.resume(); }, 1500);
+    return;
+  }
+
+  if (scanMode === 'add') {
+    // 需求：在扫描界面显示查询到的内容并保存
+    showScanFeedback('⏳ 正在查询并保存…', 'busy');
+    try {
+      const info = await SOURCES[el.source.value].lookup(isbn);
+      const existing = await findByISBN(isbn);
+      
+      let shouldSave = true;
+      if (existing.length > 0) {
+        // 如果有重复，弹窗
+        const ok = await confirmDuplicate(isbn, existing);
+        if (!ok) shouldSave = false;
+      }
+
+      if (shouldSave) {
+        await insertBook({
+          title: info.title, author: info.author, isbn: isbn, registered_at: todayISO()
+        });
+        showScanFeedback(`✔ 已保存: ${info.title}`, 'success');
+        searchBooks();
+      } else {
+        showScanFeedback('已取消保存', 'error');
+      }
+    } catch (err) {
+      showScanFeedback(`❌ 失败: ${err.message}`, 'error');
+    }
+  } 
+  else if (scanMode === 'box') {
+    showScanFeedback('⏳ 正在处理装箱状态…', 'busy');
+    try {
+      const records = await findByISBN(isbn);
+      if (records.length === 0) {
+        showScanFeedback('❌ 未找到该图书，请先添加', 'error');
+      } else {
+        const isCurrentlyBoxed = records[0].is_boxed === true;
+        if (isCurrentlyBoxed) {
+          // 暂停摄像头，弹出确认框
+          const ok = await showConfirm('取消装箱', '该图书已装箱，是否取消装箱状态？', '取消装箱');
+          if (ok) {
+            for (const r of records) await updateBoxStatus(r.id, false);
+            showScanFeedback('✔ 已取消装箱', 'success');
+          } else {
+            showScanFeedback('已取消操作', 'error');
+          }
+        } else {
+          for (const r of records) await updateBoxStatus(r.id, true);
+          showScanFeedback('✔ 已成功装箱', 'success');
+        }
+        searchBooks(); // 更新后台列表
+      }
+    } catch (err) {
+      showScanFeedback(`❌ 失败: ${err.message}`, 'error');
+    }
+  } 
+  else if (scanMode === 'search') {
+    closeCameraScan();
+    el.q.value = isbn;
+    searchBooks();
+    return;
+  }
+
+  // 处理完后恢复扫码（如果是 add 或 box 模式且界面未关闭）
+  setTimeout(() => {
+    isProcessingScan = false;
+    if ($('scanModal').classList.contains('show')) {
+      html5QrcodeScanner.resume();
+    }
+  }, 1500);
+}
+
 async function closeCameraScan() {
   $('scanModal').classList.remove('show');
+  scanFeedbackEl.className = '';
+  isProcessingScan = false;
   if (html5QrcodeScanner) {
     try { await html5QrcodeScanner.stop(); } catch(e) {}
     html5QrcodeScanner.clear();
@@ -636,19 +809,21 @@ el.btnSearch.addEventListener('click', searchBooks);
 
 $('btnScanAdd').addEventListener('click', () => startCameraScan('add'));
 $('btnScanSearch').addEventListener('click', () => startCameraScan('search'));
+$('btnScanBox').addEventListener('click', () => startCameraScan('box'));
 $('btnCloseScan').addEventListener('click', closeCameraScan);
 
 el.isbn.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); if (!el.btnQuery.disabled) handleQueryAndSave(); }
+  if (e.key === 'Enter') { e.preventDefault(); handleQueryAndSave(); }
 });
-[el.title, el.author].forEach(inp => {
-  inp.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); if (!el.btnManual.disabled) handleManualSave(); }
-  });
+el.boxIsbn.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); handleToggleBox(); }
 });
 el.q.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); searchBooks(); }
 });
+
+// 绑定装箱按钮
+el.btnToggleBox.addEventListener('click', handleToggleBox);
 
 (function init() {
   el.date.value = todayISO();
