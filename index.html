@@ -388,8 +388,7 @@ const SOURCES = {
   douban: {
     name: '豆瓣图书',
     async lookup(isbn) {
-      // 注意这里：函数名是 douban-proxy，不是 dynamic-endpoint
-      const proxyUrl = `${SB_URL}/functions/v1/douban-proxy?isbn=${isbn}`;
+      const proxyUrl = `${SB_URL}/functions/v1/dynamic-endpoint?isbn=${isbn}`;
       const headers = { 'Authorization': 'Bearer ' + SB_KEY, 'apikey': SB_KEY };
       
       const r = await fetch(proxyUrl, { headers });
