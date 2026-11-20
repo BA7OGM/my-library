@@ -485,31 +485,26 @@ function showConfirm(title, msg, okText = '确认', cancelText = '取消') {
   });
 }
 
+// 保存当前页面的数据，方便编辑时直接读取，免去网络请求
+let currentBooksData = [];
 let currentEditId = null;
 
 function editBook(id) {
-  // 从当前的 DOM 行数据或者重新 fetch 获取数据都可以
-  // 为简单起见，我们通过 id 获取该行在界面上显示的数据，或者从 Supabase 再拉取
-  // 最好的方法是从 Supabase 查询以确保最新
-  fetch(`${SB_URL}/rest1/${TABLE}?id=eq.${id}`, { headers: sbHeaders() })
-    .then(r => {
-       if(!r.ok) throw new Error('无法获取记录');
-       return r.json();
-    })
-    .then(data => {
-      if(!data || !data.length) throw new Error('记录不存在');
-      const book = data[0];
-      currentEditId = id;
-      
-      $('editIsbn').value = book.isbn;
-      $('editTitle').value = book.title || '';
-      $('editAuthor').value = book.author || '';
-      $('editDate').value = book.registered_at || todayISO();
-      $('editBoxed').checked = book.is_boxed === true;
-      
-      $('editModal').classList.add('show');
-    })
-    .catch(err => alert('获取图书信息失败: ' + err.message));
+  // 从内存中直接读取数据，瞬间响应
+  const book = currentBooksData.find(b => b.id === id);
+  if (!book) {
+    alert('未找到该图书的数据，请刷新页面重试');
+    return;
+  }
+  
+  currentEditId = id;
+  $('editIsbn').value = book.isbn;
+  $('editTitle').value = book.title || '';
+  $('editAuthor').value = book.author || '';
+  $('editDate').value = book.registered_at || todayISO();
+  $('editBoxed').checked = book.is_boxed === true;
+  
+  $('editModal').classList.add('show');
 }
 
 async function saveEdit() {
@@ -534,7 +529,7 @@ async function saveEdit() {
       is_boxed: isBoxed
     });
     $('editModal').classList.remove('show');
-    searchBooks();
+    searchBooks(); // 保存成功后刷新列表
   } catch (err) {
     alert('保存失败：' + err.message);
   } finally {
@@ -793,6 +788,7 @@ async function handleToggleBox() {
    搜索与表格渲染
    ========================================================= */
 function renderRows(rows) {
+  currentBooksData = rows; // 保存数据，供编辑时读取
   el.count.textContent = rows.length ? `共 ${rows.length} 条` : '';
   if (!rows.length) { el.rows.innerHTML = `<tr><td colspan="7" class="empty">没有找到匹配的图书</td></tr>`; return; }
   
