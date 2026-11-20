@@ -464,47 +464,8 @@ function confirmDuplicate(isbn, existing) {
 }
 
 /* =========================================================
-   数据源
+   数据源与查询缓存
    ========================================================= */
-const SOURCES = {
-  openlibrary: {
-    name: 'Open Library',
-    async lookup(isbn) {
-      const r = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`);
-      if (!r.ok) throw new Error(`OpenLibrary 响应错误 (${r.status})`);
-      const data = await r.json();
-      const key = `ISBN:${isbn}`;
-      if (!data[key]) throw new Error('Open Library 未收录该 ISBN');
-      return { title: data[key].title || '', author: (data[key].authors || []).map(a => a.name).join(', ') };
-    }
-  },
-  googlebooks: {
-    name: 'Google Books',
-    async lookup(isbn) {
-      const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&maxResults=1`);
-      if (!r.ok) throw new Error(`Google Books 响应错误 (${r.status})`);
-      const data = await r.json();
-      if (!data.items || !data.items.length) throw new Error('Google Books 未找到该 ISBN');
-      const v = data.items[0].volumeInfo || {};
-      return { title: v.title || '', author: (v.authors || []).join(', ') };
-    }
-  },
-  douban: {
-    name: '豆瓣图书',
-    async lookup(isbn) {
-      const proxyUrl = `${SB_URL}/functions/v1/dynamic-endpoint?isbn=${isbn}&source=douban`;
-      return await fetchProxy(proxyUrl);
-    }
-  },
-  isbntw: {
-    name: 'isbn.tw',
-    async lookup(isbn) {
-      const proxyUrl = `${SB_URL}/functions/v1/dynamic-endpoint?isbn=${isbn}&source=isbntw`;
-      return await fetchProxy(proxyUrl);
-    }
-  }
-};
-
 async function fetchProxy(proxyUrl) {
   const headers = { 'Authorization': 'Bearer ' + SB_KEY, 'apikey': SB_KEY };
   const r = await fetch(proxyUrl, { headers });
@@ -516,6 +477,69 @@ async function fetchProxy(proxyUrl) {
   if (!data.success) throw new Error(data.error || '获取数据失败');
   return { title: data.title, author: data.author };
 }
+
+// 封装带缓存的 lookup
+async function lookupWithCache(isbn, sourceKey, lookupFn) {
+  const cacheKey = `book_${sourceKey}_${isbn}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    const { data, timestamp } = JSON.parse(cached);
+    // 缓存24小时
+    if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
+      return data;
+    }
+  }
+  const data = await lookupFn(isbn);
+  localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+  return data;
+}
+
+const SOURCES = {
+  openlibrary: {
+    name: 'Open Library',
+    async lookup(isbn) {
+      return lookupWithCache(isbn, 'openlibrary', async (i) => {
+        const r = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${i}&format=json&jscmd=data`);
+        if (!r.ok) throw new Error(`OpenLibrary 响应错误 (${r.status})`);
+        const data = await r.json();
+        const key = `ISBN:${i}`;
+        if (!data[key]) throw new Error('Open Library 未收录该 ISBN');
+        return { title: data[key].title || '', author: (data[key].authors || []).map(a => a.name).join(', ') };
+      });
+    }
+  },
+  googlebooks: {
+    name: 'Google Books',
+    async lookup(isbn) {
+      return lookupWithCache(isbn, 'googlebooks', async (i) => {
+        const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${i}&maxResults=1`);
+        if (!r.ok) throw new Error(`Google Books 响应错误 (${r.status})`);
+        const data = await r.json();
+        if (!data.items || !data.items.length) throw new Error('Google Books 未找到该 ISBN');
+        const v = data.items[0].volumeInfo || {};
+        return { title: v.title || '', author: (v.authors || []).join(', ') };
+      });
+    }
+  },
+  douban: {
+    name: '豆瓣图书',
+    async lookup(isbn) {
+      return lookupWithCache(isbn, 'douban', async (i) => {
+        const proxyUrl = `${SB_URL}/functions/v1/douban-proxy?isbn=${i}`;
+        return await fetchProxy(proxyUrl);
+      });
+    }
+  },
+  isbntw: {
+    name: 'isbn.tw',
+    async lookup(isbn) {
+      return lookupWithCache(isbn, 'isbntw', async (i) => {
+        const proxyUrl = `${SB_URL}/functions/v1/isbntw-proxy?isbn=${i}`;
+        return await fetchProxy(proxyUrl);
+      });
+    }
+  }
+};
 
 /* =========================================================
    核心逻辑：添加图书
@@ -665,7 +689,6 @@ async function searchBooks() {
   if (rawKeyword) {
     const isNumeric = /^\d+X?$/i.test(rawKeyword);
     if (isNumeric) {
-      // 【修复】因为 isbn 可能是 bigint 类型，不支持 ilike 模糊搜索，所以纯数字使用 eq 精确搜索
       url += `&isbn=eq.${rawKeyword}`;
     } else {
       let keywords = [rawKeyword];
