@@ -168,7 +168,7 @@
             <label for="source">查询数据源</label>
             <select id="source">
               <option value="douban" selected>豆瓣图书 (推荐)</option>
-              <option value="isbntw">isbn.tw (台版推荐)</option>
+              <option value="isbntw">isbn.tw (台版备用)</option>
               <option value="openlibrary">Open Library</option>
               <option value="googlebooks">Google Books</option>
             </select>
@@ -472,14 +472,26 @@ async function fetchProxy(proxyUrl, sourceName) {
   try {
     r = await fetch(proxyUrl, { headers });
   } catch (e) {
-    throw new Error(`网络连接失败，无法访问 ${sourceName} 代理。请确认 Supabase 函数已部署，且没有拦截跨域请求。`);
+    throw new Error(`网络连接失败，无法访问 ${sourceName} 代理。`);
   }
 
   if (!r.ok) {
-    if (r.status === 404) throw new Error(`代理函数未找到 (404)。请检查 Supabase 函数名是否为 ${sourceName}-proxy。`);
-    if (r.status === 500) throw new Error(`服务器响应超时或被限流，请稍后再试或切换数据源。`);
-    throw new Error(`代理服务响应错误 (${r.status})`);
+    if (r.status === 404) {
+      throw new Error(`代理函数未找到 (404)。请检查 Supabase 函数名是否为 ${sourceName}-proxy。`);
+    }
+    
+    // 提取并显示 Supabase 返回的真实错误
+    let detailMsg = `响应状态码 ${r.status}`;
+    try {
+      const errorData = await r.json();
+      if (errorData && errorData.error) {
+        detailMsg = errorData.error;
+      }
+    } catch (e) {}
+    
+    throw new Error(`${sourceName} 代理错误：${detailMsg}`);
   }
+  
   const data = await r.json();
   if (!data.success) throw new Error(data.error || '获取数据失败');
   return { title: data.title, author: data.author };
@@ -533,7 +545,7 @@ const SOURCES = {
     async lookup(isbn) {
       return lookupWithCache(isbn, 'douban', async (i) => {
         const proxyUrl = `${SB_URL}/functions/v1/douban-proxy?isbn=${i}`;
-        return await fetchProxy(proxyUrl, 'douban');
+        return await fetchProxy(proxyUrl, '豆瓣');
       });
     }
   },
@@ -542,7 +554,7 @@ const SOURCES = {
     async lookup(isbn) {
       return lookupWithCache(isbn, 'isbntw', async (i) => {
         const proxyUrl = `${SB_URL}/functions/v1/isbntw-proxy?isbn=${i}`;
-        return await fetchProxy(proxyUrl, 'isbntw');
+        return await fetchProxy(proxyUrl, 'isbn.tw');
       });
     }
   }
