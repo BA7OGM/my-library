@@ -156,20 +156,19 @@
   <main class="layout">
     <!-- ================= 左侧控制面板 ================= -->
     <section class="card">
-      <!-- Tabs 切换 -->
       <div class="tabs">
         <button class="tab-btn active" data-tab="tab-add">添加图书</button>
         <button class="tab-btn" data-tab="tab-box">装箱管理</button>
       </div>
 
       <div class="card-body">
-        
         <!-- ====== Tab 1: 添加图书 ====== -->
         <div id="tab-add" class="tab-content active">
           <div class="field">
             <label for="source">查询数据源</label>
             <select id="source">
               <option value="douban" selected>豆瓣图书 (推荐)</option>
+              <option value="isbntw">isbn.tw (台版推荐)</option>
               <option value="openlibrary">Open Library</option>
               <option value="googlebooks">Google Books</option>
             </select>
@@ -224,7 +223,6 @@
           </div>
           <div class="status" id="boxStatus"></div>
         </div>
-
       </div>
     </section>
 
@@ -268,7 +266,6 @@
     <h3 id="scanTitle">扫描条形码</h3>
     <p class="muted" style="margin-bottom:12px;">请将条形码对准摄像头</p>
     <div id="reader"></div>
-    <!-- 扫码内反馈区 -->
     <div id="scanFeedback"></div>
     <div class="modal-actions">
       <button class="btn" id="btnCloseScan" type="button">关闭</button>
@@ -351,7 +348,7 @@ function isValidISBN(raw) {
 }
 
 /* =========================================================
-   UI 交互：Tab 切换
+   UI 交互
    ========================================================= */
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -410,7 +407,6 @@ async function updateBoxStatus(id, status) {
   return await r.json();
 }
 
-// 新增：删除操作
 async function deleteBook(id) {
   const ok = await showConfirm('确认删除', '确定要永久删除这条图书记录吗？', '确定删除', '取消');
   if (!ok) return;
@@ -420,28 +416,22 @@ async function deleteBook(id) {
       method: 'DELETE',
       headers: sbHeaders()
     });
-    if (!r.ok) {
-      const txt = await r.text();
-      throw new Error(`删除失败: ${txt}`);
-    }
-    searchBooks(); // 刷新列表
+    if (!r.ok) throw new Error(`删除失败`);
+    searchBooks();
   } catch (err) {
     alert(err.message);
   }
 }
 
 /* =========================================================
-   通用弹窗 (确认框)
+   弹窗
    ========================================================= */
 function showConfirm(title, msg, okText = '确认', cancelText = '取消') {
   return new Promise((resolve) => {
     const modal = $('confirmModal'), body = $('confirmBody'), actions = $('confirmActions');
     $('confirmTitle').textContent = title;
     body.innerHTML = msg;
-    actions.innerHTML = `
-      <button class="btn" id="cmCancel">${cancelText}</button>
-      <button class="btn primary" id="cmOk">${okText}</button>
-    `;
+    actions.innerHTML = `<button class="btn" id="cmCancel">${cancelText}</button><button class="btn primary" id="cmOk">${okText}</button>`;
     modal.classList.add('show');
     actions.querySelector('#cmCancel').onclick = () => { modal.classList.remove('show'); resolve(false); };
     actions.querySelector('#cmOk').onclick = () => { modal.classList.remove('show'); resolve(true); };
@@ -466,7 +456,6 @@ function confirmDuplicate(isbn, existing) {
 
     const check = body.querySelector('#dupConfirm');
     const okBtn = actions.querySelector('#dupOk');
-    
     check.addEventListener('change', () => { okBtn.disabled = !check.checked; });
     const close = (val) => { modal.classList.remove('show'); resolve(val); };
     okBtn.addEventListener('click', () => close(true));
@@ -503,27 +492,33 @@ const SOURCES = {
   douban: {
     name: '豆瓣图书',
     async lookup(isbn) {
-      const proxyUrl = `${SB_URL}/functions/v1/dynamic-endpoint?isbn=${isbn}`;
-      const headers = { 'Authorization': 'Bearer ' + SB_KEY, 'apikey': SB_KEY };
-      
-      const r = await fetch(proxyUrl, { headers });
-      
-      if (!r.ok) {
-        if (r.status === 500) {
-          throw new Error('豆瓣服务器响应超时或被限流，请稍后再试，或切换数据源。');
-        }
-        throw new Error(`代理服务响应错误 (${r.status})`);
-      }
-      
-      const data = await r.json();
-      if (!data.success) throw new Error(data.error || '从豆瓣获取数据失败');
-      return { title: data.title, author: data.author };
+      const proxyUrl = `${SB_URL}/functions/v1/dynamic-endpoint?isbn=${isbn}&source=douban`;
+      return await fetchProxy(proxyUrl);
+    }
+  },
+  isbntw: {
+    name: 'isbn.tw',
+    async lookup(isbn) {
+      const proxyUrl = `${SB_URL}/functions/v1/dynamic-endpoint?isbn=${isbn}&source=isbntw`;
+      return await fetchProxy(proxyUrl);
     }
   }
 };
 
+async function fetchProxy(proxyUrl) {
+  const headers = { 'Authorization': 'Bearer ' + SB_KEY, 'apikey': SB_KEY };
+  const r = await fetch(proxyUrl, { headers });
+  if (!r.ok) {
+    if (r.status === 500) throw new Error('服务器响应超时或被限流，请稍后再试或切换数据源。');
+    throw new Error(`代理服务响应错误 (${r.status})`);
+  }
+  const data = await r.json();
+  if (!data.success) throw new Error(data.error || '获取数据失败');
+  return { title: data.title, author: data.author };
+}
+
 /* =========================================================
-   核心逻辑：添加图书 (表单)
+   核心逻辑：添加图书
    ========================================================= */
 const el = {
   source: $('source'), isbn: $('isbn'), title: $('title'), author: $('author'), date: $('date'),
@@ -577,7 +572,6 @@ async function handleQueryAndSave() {
     
     if (saved) {
       setStatus(el.addStatus, `✔ 保存成功：《${saved.title}》`, 'success');
-      // 需求：查询成功后清空ISBN输入框
       el.isbn.value = ''; el.title.value = ''; el.author.value = '';
       el.isbn.dispatchEvent(new Event('input'));
       searchBooks();
@@ -671,8 +665,8 @@ async function searchBooks() {
   if (rawKeyword) {
     const isNumeric = /^\d+X?$/i.test(rawKeyword);
     if (isNumeric) {
-      // 移除可能引起解析问题的符号，采用精确查询+模糊查询组合
-      url += `&or=(isbn.ilike.*${rawKeyword}*,isbn.eq.${rawKeyword})`;
+      // 【修复】因为 isbn 可能是 bigint 类型，不支持 ilike 模糊搜索，所以纯数字使用 eq 精确搜索
+      url += `&isbn=eq.${rawKeyword}`;
     } else {
       let keywords = [rawKeyword];
       if (window.OpenCC) {
@@ -712,7 +706,7 @@ async function searchBooks() {
    相机扫描模块
    ========================================================= */
 let html5QrcodeScanner = null;
-let scanMode = 'add'; // 'add', 'search', 'box'
+let scanMode = 'add';
 let isProcessingScan = false;
 
 const scanFeedbackEl = $('scanFeedback');
@@ -739,7 +733,7 @@ function startCameraScan(mode) {
   html5QrcodeScanner.start(
     { facingMode: "environment" }, config,
     onScanSuccess,
-    () => { /* 忽略帧错误 */ }
+    () => {}
   ).catch(err => {
     alert(`无法启动摄像头: ${err.message}\n请确保使用 HTTPS 并允许权限。`);
     closeCameraScan();
@@ -856,7 +850,6 @@ el.q.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); searchBooks(); }
 });
 
-// 将 deleteBook 暴露到全局，以便表格中的 onclick 能调用
 window.deleteBook = deleteBook;
 
 (function init() {
